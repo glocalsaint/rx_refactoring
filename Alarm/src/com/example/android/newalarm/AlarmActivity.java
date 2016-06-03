@@ -76,6 +76,29 @@ public class AlarmActivity extends Activity {
         // Sets the listener for the start button
         button.setOnClickListener(mStartAlarmListener);
 
+        //************************************************************************
+        //Instead of clicklisterners. Get Observables from click enent stream and
+        //add a subscriber with the event handler code.
+        // https://github.com/JakeWharton/RxBinding this is library has the more 
+        // flexibility to generate Observables out of event streams(buttons/Views/textviews...)
+        
+        Observable<OnClickEvent> clicksObservable
+                    = ViewObservable.clicks(button); 
+        
+        clicksObservable    
+        .subscribe(new Action1<OnClickEvent>() {        
+            public void call(OnClickEvent onClickEvent) {
+                long firstAlarmTime = SystemClock.elapsedRealtime();
+            
+            mAlarmManager.setRepeating(
+                AlarmManager.ELAPSED_REALTIME_WAKEUP, // based on time since last wake up
+                firstAlarmTime,  // sends the first alarm immediately
+                THIRTY_SECONDS_MILLIS,  // repeats every thirty seconds
+                mAlarmSender  // when the alarm goes off, sends this Intent
+            );
+        });
+        //************************************************************************
+
         // Finds the button that stops countdown timer
         button = (Button)findViewById(R.id.stop_alarm);
 

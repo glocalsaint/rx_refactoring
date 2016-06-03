@@ -61,12 +61,41 @@ public final class ContactManager extends Activity
         mShowInvisibleControl.setChecked(mShowInvisible);
 
         // Register handler for UI elements
+        //*************************************************************
+        //Using Observable to handle clicks.
+        Observable<OnClickEvent> clicksObservable
+            = ViewObservable.clicks(mAddAccountButton); 
+
+            clicksObservable            
+            .subscribe(new Action1<OnClickEvent>() {
+                @Override
+                public void call(OnClickEvent onClickEvent) {
+                    Log.d(TAG, "mAddAccountButton clicked");
+                launchContactAdder();
+                }
+            });
+        //*************************************************************
         mAddAccountButton.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 Log.d(TAG, "mAddAccountButton clicked");
                 launchContactAdder();
             }
         });
+        //*************************************************************
+        //Using Observable to handle checkedchanged.
+        Observable<OnCheckedChangeEvent> checkObservable
+            = ViewObservable.OnCheckedChanged(mShowInvisibleControl); 
+
+            checkObservable            
+            .subscribe(new Action1<OnClickEvent>() {
+                @Override
+                public void call(OnClickEvent onClickEvent) {
+                    Log.d(TAG, "mShowInvisibleControl changed: " + isChecked);
+                    mShowInvisible = isChecked;
+                    populateContactList();
+                }
+            });
+        //*************************************************************
         mShowInvisibleControl.setOnCheckedChangeListener(new OnCheckedChangeListener() {
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
                 Log.d(TAG, "mShowInvisibleControl changed: " + isChecked);
@@ -82,6 +111,25 @@ public final class ContactManager extends Activity
     /**
      * Populate the contact list based on account currently selected in the account spinner.
      */
+    //Use Observable to getcontacts asynchronously and update adapter when ready.(instead of populateContactList)
+    Observable.create()
+    .map(new Func1<void,UserInfo>(){
+        public Cursor call(String user){
+           return getContacts();
+        }
+    })
+    .subscribe(new Observer<Cursor>(){
+        public void onCompleted(){...}
+        public void onError(){...}
+        public void onNext(UserInfo user){        
+                String[] fields = new String[] {
+                ContactsContract.Data.DISPLAY_NAME
+                };
+                SimpleCursorAdapter adapter = new SimpleCursorAdapter(this, R.layout.contact_entry, cursor,
+                        fields, new int[] {R.id.contactEntryText});
+                mContactList.setAdapter(mSimpleCursorAdapter);
+        }
+    });
     private void populateContactList() {
         // Build adapter with contact entries
         Cursor cursor = getContacts();

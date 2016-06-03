@@ -133,6 +133,8 @@ public class AlarmService extends Service {
         mNotificationManager = (NotificationManager)getSystemService(NOTIFICATION_SERVICE);
 
         // Updates the status bar to indicate that this service is running.
+        // showNotification() is an independantly running task which can run asynchronously. 
+        // It can be put in an Observable Async.Start();
         showNotification();
 
         // Creates a new thread. A new thread is used so that the service's work doesn't block
@@ -145,8 +147,36 @@ public class AlarmService extends Service {
         );
         // Starts the thread
         mWorkThread.start();
-    }
 
+        //************************************************************************************
+        // The task in the thread can be encapsulated with Observers subscription. The timer can
+        // be used to address the above 15seconds. Or if the timer needs to be avoided, we can 
+        // use the //observable.just(null)
+        Observable.timer(start_delay, poll_interval)
+                .subscribeOn(Schedulers.NewThread)
+                .subscribe(new Observer<Long>(){
+                    public void onCompleted(){//dosomething}
+                    public void onError(){//handle error}
+                    public void onNext(){
+                        mWorkThread
+                    }
+                });
+        // or
+        Observable.create(new Observable.onSubscribe(
+            new Action1<subscriber<? super T>{
+                public void call(){
+                    mWorkThread task execution;
+                }
+            }
+            ));
+            .subscribeOn(Schedulers.NewThread)
+            .subscribe(new Observer<>(){
+                public void onCompleted(){//dosomething}
+                public void onError(){//handle error}
+                public void onNext(){}
+            });                
+        //
+        //************************************************************************************        
     /**
      * Stops the service in response to the stopSelf() issued when the wait is over. Other
      * clients that use this service could stop it by issuing a stopService() or a stopSelf() on

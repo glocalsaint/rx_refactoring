@@ -79,6 +79,11 @@ public class BusinessCardActivity extends Activity  {
      * will contain a reference to the contact selected by the user. We will treat it as
      * an opaque URI and allow the SDK-specific ContactAccessor to handle the URI accordingly.
      */
+    //To convert the whole startintentforResult and its callback funtion onActivityResult
+    //into an observable, an RsActivityResult is designed.
+    //to transform a startintentforResult into an Observable.
+    //https://github.com/VictorAlbertos/RxActivityResult/blob/master/rx_activity_result/src/main/java/rx_activity_result/RxActivityResult.java
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == PICK_CONTACT_REQUEST && resultCode == RESULT_OK) {
@@ -91,6 +96,21 @@ public class BusinessCardActivity extends Activity  {
      */
     private void loadContactInfo(Uri contactUri) {
 
+        //Convert the AsyncTask into an Observable.
+        Observable.just(contactUri)
+            .map(new Func1<Uri... uris,ContactInfo>(){
+                public ContactInfo call((Uri... uris){
+                    return mContactAccessor.loadContact(getContentResolver(), uris[0]);
+                }
+            })
+            .subscribe(new Observer<ContactInfo>(){
+                public void onCompleted(){...}
+                public void onError(){...}
+                public void onNext(ContactInfo result){
+                //UI Update
+                    bindView(result);
+                }
+            });
         /*
          * We should always run database queries on a background thread. The database may be
          * locked by some process for a long time.  If we locked up the UI thread while waiting

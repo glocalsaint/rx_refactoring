@@ -41,7 +41,9 @@ import android.util.Log;
  * {@link android.hardware.SensorManager SensorManager} API to draw
  * a 3D compass.
  */
-public class CompassActivity extends Activity implements Renderer, SensorEventListener {
+//This is an alternative implementation to AccelerometerPlay
+// Implement Observer<ReactivieSensorEvent as well;
+public class CompassActivity extends Activity implements Renderer, Observer<RectiveSensorEvent> {
     private GLSurfaceView mGLSurfaceView;
     private SensorManager mSensorManager;
     private float[] mGData = new float[3];
@@ -53,6 +55,9 @@ public class CompassActivity extends Activity implements Renderer, SensorEventLi
     private ByteBuffer mIndexBuffer;
     private float[] mOrientation = new float[3];
     private int mCount;
+
+    //to hold the Observable
+    private Subscription subscription;
 
     public CompassActivity() {
     }
@@ -66,6 +71,34 @@ public class CompassActivity extends Activity implements Renderer, SensorEventLi
         mGLSurfaceView = new GLSurfaceView(this);
         mGLSurfaceView.setRenderer(this);
         setContentView(mGLSurfaceView);
+
+        //
+        subscription = Observable.create(new Observable.OnSubscribe<ReactiveSensorEvent>() {
+              @Override public void call(final Subscriber<? super ReactiveSensorEvent> subscriber) {
+
+                final SensorEventListener listener = new SensorEventListener() {
+                  @Override public void onSensorChanged(SensorEvent sensorEvent) {
+                    ReactiveSensorEvent event = new ReactiveSensorEvent(sensorEvent);
+                    subscriber.onNext(event);
+                  }
+
+                  @Override public void onAccuracyChanged(Sensor sensor, int accuracy) {
+                    ReactiveSensorEvent event = new ReactiveSensorEvent(sensor, accuracy);
+                    subscriber.onNext(event);
+                  }
+                };
+
+                sensorManager.registerListener(listener, sensor, samplingPeriodInUs);
+
+                }))
+                .doOnusubscribe(){
+                    sensorManager.registerListener(listener, sensor, samplingPeriodInUs);
+                }
+
+              }
+    });
+  }
+
     }
 
     @Override
@@ -89,6 +122,7 @@ public class CompassActivity extends Activity implements Renderer, SensorEventLi
         mSensorManager.unregisterListener(this);
     }
 
+    //From Renderer
     public void onDrawFrame(GL10 gl) {
         /*
          * Usually, the first thing one might want to do is to clear
@@ -122,7 +156,7 @@ public class CompassActivity extends Activity implements Renderer, SensorEventLi
         gl.glColorPointer(4, GL_FLOAT, 0, mColorBuffer);
         gl.glDrawElements(GL_LINES, 6, GL_UNSIGNED_BYTE, mIndexBuffer);
     }
-
+    //From Renderer
     public void onSurfaceChanged(GL10 gl, int width, int height) {
         gl.glViewport(0, 0, width, height);
 
@@ -137,7 +171,7 @@ public class CompassActivity extends Activity implements Renderer, SensorEventLi
         gl.glLoadIdentity();
         gl.glFrustumf(-ratio, ratio, -1, 1, 1, 10);
     }
-
+    //From Renderer
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
         /*
          * By default, OpenGL enables features that improve quality
@@ -201,10 +235,10 @@ public class CompassActivity extends Activity implements Renderer, SensorEventLi
         mIndexBuffer.put(indices);
         mIndexBuffer.position(0);
     }
-
+    //From SensorEventListener
     public void onAccuracyChanged(Sensor sensor, int accuracy) {
     }
-
+    //From SensorEventListener
     public void onSensorChanged(SensorEvent event) {
         int type = event.sensor.getType();
         float[] data;

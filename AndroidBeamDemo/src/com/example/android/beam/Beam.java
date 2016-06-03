@@ -38,7 +38,9 @@ import android.widget.Toast;
 
 import java.nio.charset.Charset;
 
-
+//createNdefMessage() will be called when another NFC device comes near and a peer-to-peer connection is established.
+//This callback then creates the NDEF message to be sent.
+//
 public class Beam extends Activity implements CreateNdefMessageCallback,
         OnNdefPushCompleteCallback {
     NfcAdapter mNfcAdapter;
@@ -51,17 +53,50 @@ public class Beam extends Activity implements CreateNdefMessageCallback,
         setContentView(R.layout.main);
 
         mInfoText = (TextView) findViewById(R.id.textView);
-        // Check for available NFC Adapter
-        mNfcAdapter = NfcAdapter.getDefaultAdapter(this);
-        if (mNfcAdapter == null) {
-            mInfoText = (TextView) findViewById(R.id.textView);
-            mInfoText.setText("NFC is not available on this device.");
-        } else {
-            // Register callback to set NDEF message
-            mNfcAdapter.setNdefPushMessageCallback(this, this);
-            // Register callback to listen for message-sent success
-            mNfcAdapter.setOnNdefPushCompleteCallback(this, this);
-        }
+
+        //Decouple CreateNdefMessageCallback and OnNdefPushCompleteCallback objects from the Activity and passthem
+        //as anonymous functions like below. Since the NFC device is onetime event
+        Observable<NfcAdapter> obervable = Observable.from(NfcAdapter.getDefaultAdapter(this))
+            .subscribeOn(Schedulers.newThread)
+            .observeOn(Schedulers.MainThread)
+            .subscribe(new Observer<NfcAdapter>{
+                @Override public void onNext(NfcAdapter mNfcAdapter)
+                {
+                    if (mNfcAdapter == null) {
+                        mInfoText = (TextView) findViewById(R.id.textView);
+                        mInfoText.setText("NFC is not available on this device.");
+                    } else {
+                        // Register callback to set NDEF message
+                        mNfcAdapter.setNdefPushMessageCallback(getActivity(), new CreateNdefMessageCallback(){
+                             /**
+                             * Implementation for the CreateNdefMessageCallback interface
+                             */
+                            @Override
+                            public NdefMessage createNdefMessage(NfcEvent event) {
+                                Time time = new Time();
+                                time.setToNow();
+                                String text = ("Beam me up!\n\n" +
+                                        "Beam Time: " + time.format("%H:%M:%S"));
+                                NdefMessage msg = new NdefMessage(NdefRecord.createMime(
+                                        "application/com.example.android.beam", text.getBytes())
+                        });
+
+                        // Register callback to listen for message-sent success
+                        mNfcAdapter.setOnNdefPushCompleteCallback(getActivity(), new OnNdefPushCompleteCallback(){
+                            @Override
+                            public void onNdefPushComplete(NfcEvent arg0) {
+                                // A handler is needed to send messages to the activity when this
+                                // callback occurs, because it happens from a binder thread
+                                mHandler.obtainMessage(MESSAGE_SENT).sendToTarget();
+                            }
+
+                        });
+                    }
+                }
+            })
+
+        ;).
+        
     }
 
 

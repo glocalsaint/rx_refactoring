@@ -109,6 +109,46 @@ public class AccelerometerPlayActivity extends Activity {
         mWakeLock.release();
     }
 
+//1. The sensor event listener needs to be decoupled from the Simulation View and should be defined inside an Observer.
+//2. It will be registered with the sensormanager whenever a new subscriber subscribes to the Observable. and 
+//will be unregistered upon unsubscribing.
+//3. Since only one object can be passed to the subscriber(sensorevent), A new encapsulation over sensorevent needs to 
+//be created which can store the cause of the event trigger(onsizechanged, onSensorChanged..etc) and the associated 
+//changed values.
+//4. ReactiveSensorEvent like this one. https://github.com/pwittchen/ReactiveSensors/blob/master/library/src/main/java/com/github/pwittchen/reactivesensors/library/ReactiveSensorEvent.java
+//4. Can use Observable.defer to start reading sensor only after an observer subscribes.
+//5. if we want to get notified when the Subscriber unsubscribes, so that we deregister the listener, we need to add
+//another subscription to the subscriber, which will be executed when it is unsubscribed from the Observable.
+//6. To unregister listener we can do either 5. or we can add the unregistering in Obervable.doOnUnsubscribe() method also.   
+//6. Add all the event handlers inside the observer(which gets the encapsulated event object).
+//7. Make the observervable subscribeOn(Schedulers.computation) and observeOn(mainthread);
+    public Observable<SensorEvent> observeSensor() {
+            return Observable.create(new Observable.OnSubscribe<ReactiveSensorEvent>() {
+              @Override public void call(final Subscriber<? super ReactiveSensorEvent> subscriber) {
+                final SensorEventListener listener = new SensorEventListener() {
+                  @Override public void onSensorChanged(SensorEvent sensorEvent) {
+                        
+                        subscriber.onNext(sensorEvent);
+                  }
+
+                  @Override public void onAccuracyChanged(Sensor sensor, int accuracy) {
+                    ReactiveSensorEvent event = new ReactiveSensorEvent(sensor, accuracy);
+                    subscriber.onNext(event);
+                  }
+                   @Override protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+                    ReactiveSensorEvent event = new ReactiveSensorEvent(w,h,oldw,oldh);
+                    subscriber.onNext(event)
+                   }
+                   @Override protected void onDraw(Canvas canvas) {
+                    ReactiveSensorEvent event = new ReactiveSensorEvent(w,h,oldw,oldh);
+                    subscriber.onNext(event)
+                };
+
+                sensorManager.registerListener(listener, sensor, samplingPeriodInUs);                
+                }
+                subscriber.add(Subscriptions.create(() -> sensorManager.unregisterListener(listener))
+    });
+  }
     class SimulationView extends View implements SensorEventListener {
         // diameter of the balls in meters
         private static final float sBallDiameter = 0.004f;
@@ -157,6 +197,7 @@ public class AccelerometerPlayActivity extends Activity {
                 final float r = ((float) Math.random() - 0.5f) * 0.2f;
                 mOneMinusFriction = 1.0f - sFriction + r;
             }
+
 
             public void computePhysics(float sx, float sy, float dT, float dTC) {
                 // Force of gravity applied to our virtual object
@@ -261,6 +302,10 @@ public class AccelerometerPlayActivity extends Activity {
              * position of all the particles and resolving the constraints and
              * collisions.
              */
+            //This is the compute intensive part which could block the UI Thread,
+            //But this is called from the onDraw() event of the listener which is 
+            //part of the Observable now. So the observable is scheduled on the
+            //Schedulers.Computation.
             public void update(float sx, float sy, long now) {
                 // update the system's positions
                 updatePositions(sx, sy, now);
@@ -334,10 +379,12 @@ public class AccelerometerPlayActivity extends Activity {
              * of the acceleration. As an added benefit, we use less power and
              * CPU resources.
              */
+            //Change this to adding an observer to the Observable.            
             mSensorManager.registerListener(this, mAccelerometer, SensorManager.SENSOR_DELAY_UI);
         }
 
         public void stopSimulation() {
+            //Change this to unsubscribing an observer from the Observable.
             mSensorManager.unregisterListener(this);
         }
 
@@ -428,6 +475,10 @@ public class AccelerometerPlayActivity extends Activity {
             final long now = mSensorTimeStamp + (System.nanoTime() - mCpuTimeStamp);
             final float sx = mSensorX;
             final float sy = mSensorY;
+            //compute intensive part. 
+            //Async.Start(update) will start this part asynchronously.
+            //The rest of the code in this function can go into the onCompleted part of the Observer.
+            //The Observable must be scheduledOn(Schedulers.Computation)
 
             particleSystem.update(sx, sy, now);
 
